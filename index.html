@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NÉBULA — Estúdio de Experiências Digitais</title>
+  <meta name="description" content="NÉBULA é um estúdio de São Paulo que desenha experiências digitais que parecem vivas." />
+  <meta name="theme-color" content="#050506" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200..800&family=Spectral:ital,wght@1,300;1,400&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
+</head>
+<body class="is-loading" data-theme="dark">
+
+  <!-- PRELOADER -->
+  <div class="loader" id="loader" aria-hidden="true">
+    <div class="loader__top mono"><span>NÉBULA® Estúdio</span><span>23°33′S · 46°38′O</span></div>
+    <div class="loader__center">
+      <svg class="loader__ring" viewBox="0 0 120 120">
+        <circle class="loader__track" cx="60" cy="60" r="56" />
+        <circle class="loader__prog" cx="60" cy="60" r="56" pathLength="1" />
+        <g class="loader__orbit"><circle cx="60" cy="4" r="2.4" /></g>
+      </svg>
+      <div class="loader__logo"><span class="line"><span class="loader__word">NÉBULA</span></span></div>
+      <p class="loader__sub mono"><span class="line"><span class="loader__subin" id="loaderMsg">Calibrando o céu</span></span></p>
+    </div>
+    <div class="loader__foot mono">
+      <span>Experiências digitais vivas</span>
+      <span><span id="loaderCount">000</span>%</span>
+    </div>
+    <div class="loader__bar"><span id="loaderBar"></span></div>
+  </div>
+
+  <!-- CURSOR -->
+  <div class="cursor" aria-hidden="true"><div class="cursor__dot"></div><div class="cursor__ring"><span class="cursor__label"></span></div></div>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="progress" aria-hidden="true"><span></span></div>
+
+  <!-- NAV -->
+  <header class="nav">
+    <a href="#top" class="nav__logo" data-cursor="Topo">NÉBULA<sup>®</sup></a>
+    <nav class="nav__links" aria-label="Principal">
+      <a href="#manifesto" data-magnetic><span data-text="Manifesto">Manifesto</span></a>
+      <a href="#servicos" data-magnetic><span data-text="Serviços">Serviços</span></a>
+      <a href="#trabalhos" data-magnetic><span data-text="Trabalhos">Trabalhos</span></a>
+      <a href="#processo" data-magnetic><span data-text="Processo">Processo</span></a>
+    </nav>
+    <div class="nav__meta mono"><span class="pulse"></span>São Paulo <span id="clock">00:00:00</span></div>
+    <a href="#contato" class="btn btn--pill nav__cta" data-magnetic data-cursor="Vamos?">Iniciar projeto</a>
+    <button class="nav__menu mono" aria-expanded="false" aria-controls="menu">Menu</button>
+  </header>
+
+  <!-- MOBILE MENU -->
+  <div class="menu" id="menu" aria-hidden="true">
+    <nav class="menu__links">
+      <a href="#manifesto"><span class="mono">01</span>Manifesto</a>
+      <a href="#servicos"><span class="mono">02</span>Serviços</a>
+      <a href="#trabalhos"><span class="mono">03</span>Trabalhos</a>
+      <a href="#processo"><span class="mono">04</span>Processo</a>
+      <a href="#contato"><span class="mono">05</span>Contato</a>
+    </nav>
+    <p class="menu__foot mono">ola@nebula.studio</p>
+  </div>
+
+  <main id="top">
+
+    <!-- HERO -->
+    <section class="hero">
+      <canvas id="gl" class="hero__gl" aria-hidden="true"></canvas>
+      <div class="hero__inner">
+        <p class="eyebrow hero__eyebrow"><span class="line"><span class="line__in">Estúdio de experiências digitais — desde 2019</span></span></p>
+        <h1 class="hero__title">
+          <span class="line" data-chars>Desenhamos o que</span>
+          <span class="line" data-chars><em>ainda</em> não existe.</span>
+        </h1>
+        <div class="hero__bottom">
+          <p class="hero__lead fade-in">Sites, marcas e mundos interativos para quem acredita que a tecnologia deve parecer <em>humana</em>.</p>
+          <div class="hero__ctas fade-in">
+            <a href="#trabalhos" class="btn btn--accent" data-magnetic data-cursor="Ver">Ver trabalhos <span class="arrow">→</span></a>
+            <a href="#showreel" class="btn btn--ghost" data-magnetic data-cursor="Play">Showreel <span class="play">▶</span></a>
+          </div>
+        </div>
+      </div>
+      <div class="badge fade-in" aria-hidden="true">
+        <svg viewBox="0 0 200 200">
+          <defs><path id="circ" d="M100,100 m-78,0 a78,78 0 1,1 156,0 a78,78 0 1,1 -156,0" /></defs>
+          <text><textPath href="#circ">ROLE PARA EXPLORAR ✦ ROLE PARA EXPLORAR ✦ ROLE PARA EXPLORAR ✦ </textPath></text>
+        </svg>
+        <span class="badge__star">✦</span>
+      </div>
+      <div class="hero__scroll fade-in" aria-hidden="true"><span class="mono">Role</span><i></i></div>
+    </section>
+
+    <!-- MARQUEE -->
+    <section class="marquee" aria-label="Clientes">
+      <div class="marquee__skew">
+        <div class="marquee__track">
+          <span>Aurora Bank</span><i>✦</i><span><em>Casa Lume</em></span><i>✦</i><span>Órbita Labs</span><i>✦</i><span><em>Maré Records</em></span><i>✦</i><span>Solstício</span><i>✦</i><span><em>Atlas Mobilidade</em></span><i>✦</i><span>Vértice</span><i>✦</i>
+          <span>Aurora Bank</span><i>✦</i><span><em>Casa Lume</em></span><i>✦</i><span>Órbita Labs</span><i>✦</i><span><em>Maré Records</em></span><i>✦</i><span>Solstício</span><i>✦</i><span><em>Atlas Mobilidade</em></span><i>✦</i><span>Vértice</span><i>✦</i>
+        </div>
+      </div>
+    </section>
+
+    <!-- MANIFESTO -->
+    <section class="manifesto" id="manifesto">
+      <p class="eyebrow">(01) — Manifesto</p>
+      <p class="manifesto__text" data-words>
+        Acreditamos que cada interface é um pequeno universo. Ela deve respirar, reagir e lembrar de quem a toca. Não fazemos sites — criamos lugares onde as pessoas querem ficar um pouco mais.
+      </p>
+      <div class="stats">
+        <div class="stat"><span class="stat__num" data-count="148">0</span><span class="mono">Projetos lançados</span></div>
+        <div class="stat"><span class="stat__num" data-count="32">0</span><span class="mono">Prêmios internacionais</span></div>
+        <div class="stat"><span class="stat__num" data-count="12">0</span><span class="mono">Países atendidos</span></div>
+      </div>
+    </section>
+
+    <!-- SERVICES -->
+    <section class="services" id="servicos">
+      <div class="services__head">
+        <p class="eyebrow">(02) — Serviços</p>
+        <h2 class="h2" data-split><span class="line">Quatro órbitas,</span><span class="line"><em>um só</em> céu.</span></h2>
+      </div>
+      <div class="services__track">
+        <article class="card" data-cursor="Arraste">
+          <span class="card__num mono">01</span>
+          <div class="card__icon"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="30"/><circle cx="50" cy="50" r="44" stroke-dasharray="3 6"/><circle cx="80" cy="30" r="5" class="fill"/></svg></div>
+          <h3>Estratégia <em>&amp;</em> Marca</h3>
+          <p>Posicionamento, identidade visual e sistemas de design que crescem com você.</p>
+          <ul class="mono"><li>Naming</li><li>Identidade</li><li>Design System</li></ul>
+        </article>
+        <article class="card" data-cursor="Arraste">
+          <span class="card__num mono">02</span>
+          <div class="card__icon"><svg viewBox="0 0 100 100"><rect x="18" y="18" width="64" height="64" rx="6"/><path d="M18 36h64M34 36v46"/><circle cx="26" cy="27" r="2.5" class="fill"/></svg></div>
+          <h3>Sites <em>&amp;</em> Produtos</h3>
+          <p>Experiências web de alta performance, animadas com intenção e construídas para durar.</p>
+          <ul class="mono"><li>Web</li><li>E-commerce</li><li>Apps</li></ul>
+        </article>
+        <article class="card" data-cursor="Arraste">
+          <span class="card__num mono">03</span>
+          <div class="card__icon"><svg viewBox="0 0 100 100"><path d="M50 12 L88 82 H12 Z"/><circle cx="50" cy="60" r="12"/><circle cx="50" cy="60" r="3" class="fill"/></svg></div>
+          <h3>3D <em>&amp;</em> WebGL</h3>
+          <p>Shaders, cenas interativas e objetos que respondem ao toque e ao som.</p>
+          <ul class="mono"><li>Three.js</li><li>Shaders</li><li>Realtime</li></ul>
+        </article>
+        <article class="card" data-cursor="Arraste">
+          <span class="card__num mono">04</span>
+          <div class="card__icon"><svg viewBox="0 0 100 100"><path d="M10 50 Q30 10 50 50 T90 50"/><path d="M10 64 Q30 24 50 64 T90 64" stroke-dasharray="3 5"/><circle cx="50" cy="50" r="3" class="fill"/></svg></div>
+          <h3>Motion <em>&amp;</em> Filme</h3>
+          <p>Narrativas em movimento, campanhas e conteúdo que fazem a marca dançar.</p>
+          <ul class="mono"><li>Motion</li><li>Filme</li><li>Social</li></ul>
+        </article>
+        <article class="card card--cta">
+          <p class="mono">Precisa de tudo?</p>
+          <h3>Assinatura<br/><em>Nébula+</em></h3>
+          <p>Um time inteiro de design, código e filme, por assinatura mensal. Entregas a cada três dias.</p>
+          <a href="#contato" class="btn btn--dark" data-magnetic>Saiba mais →</a>
+        </article>
+      </div>
+    </section>
+
+    <!-- SHOWREEL -->
+    <section class="showreel" id="showreel">
+      <div class="showreel__pin">
+        <p class="showreel__label mono">Role para ampliar</p>
+        <div class="showreel__frame" data-cursor="Showreel '26">
+          <canvas id="reel" aria-hidden="true"></canvas>
+          <div class="showreel__overlay">
+            <span class="showreel__title">Showreel <em>'26</em></span>
+            <div class="showreel__meta mono"><span>02:14</span><span>Design · Código · Filme</span><span>Som ligado</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- WORK -->
+    <section class="work" id="trabalhos">
+      <div class="work__head">
+        <p class="eyebrow">(03) — Trabalhos selecionados</p>
+        <h2 class="h2" data-split><span class="line">Mundos que</span><span class="line"><em>construímos</em>.</span></h2>
+      </div>
+      <ul class="work__list">
+        <li class="work__item" data-hue="28" data-cursor="Abrir" tabindex="0" role="link">
+          <span class="mono">2026</span><h3>Aurora Bank</h3><span class="work__tags mono">Marca · Web · 3D</span><span class="work__arrow">↗</span>
+        </li>
+        <li class="work__item" data-hue="150" data-cursor="Abrir" tabindex="0" role="link">
+          <span class="mono">2026</span><h3>Casa Lume</h3><span class="work__tags mono">E-commerce · Motion</span><span class="work__arrow">↗</span>
+        </li>
+        <li class="work__item" data-hue="250" data-cursor="Abrir" tabindex="0" role="link">
+          <span class="mono">2025</span><h3>Órbita Labs</h3><span class="work__tags mono">Produto · WebGL</span><span class="work__arrow">↗</span>
+        </li>
+        <li class="work__item" data-hue="340" data-cursor="Abrir" tabindex="0" role="link">
+          <span class="mono">2025</span><h3>Maré Records</h3><span class="work__tags mono">Identidade · Filme</span><span class="work__arrow">↗</span>
+        </li>
+        <li class="work__item" data-hue="75" data-cursor="Abrir" tabindex="0" role="link">
+          <span class="mono">2024</span><h3>Solstício</h3><span class="work__tags mono">Campanha · Social</span><span class="work__arrow">↗</span>
+        </li>
+      </ul>
+      <div class="work__preview" aria-hidden="true"><div class="work__preview-inner"><span class="work__preview-title"></span></div></div>
+    </section>
+
+    <!-- SKY -->
+    <section class="sky">
+      <canvas id="sky" aria-hidden="true"></canvas>
+      <div class="sky__content">
+        <p class="eyebrow">(04) — Nosso céu</p>
+        <h2 class="h2" data-split><span class="line">Cada estrela,</span><span class="line">um <em>encontro</em>.</span></h2>
+        <p class="sky__hint mono">Mova o cursor para desenhar constelações</p>
+      </div>
+    </section>
+
+    <!-- PROCESS -->
+    <section class="process" id="processo">
+      <div class="process__head">
+        <p class="eyebrow">(05) — Processo</p>
+        <h2 class="h2" data-split><span class="line">Do caos à</span><span class="line"><em>constelação</em>.</span></h2>
+      </div>
+      <ol class="steps">
+        <li class="step"><span class="step__num">01</span><div><h3>Escuta</h3><p>Imersão no seu universo, pessoas e ambições. Mapeamos o céu antes de traçar rotas.</p></div><span class="mono">Semana 1</span></li>
+        <li class="step"><span class="step__num">02</span><div><h3>Conceito</h3><p>Direção criativa, narrativa e protótipos que você pode tocar desde o primeiro dia.</p></div><span class="mono">Semanas 2–3</span></li>
+        <li class="step"><span class="step__num">03</span><div><h3>Criação</h3><p>Design e engenharia lado a lado, em ciclos curtos e entregas a cada três dias.</p></div><span class="mono">Semanas 4–8</span></li>
+        <li class="step"><span class="step__num">04</span><div><h3>Lançamento</h3><p>Performance, acessibilidade e cuidado nos detalhes. Depois, seguimos orbitando juntos.</p></div><span class="mono">Sempre</span></li>
+      </ol>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta" id="contato">
+      <p class="eyebrow">(06) — Contato</p>
+      <a href="mailto:ola@nebula.studio" class="cta__big" data-cursor="Escrever">
+        <span class="cta__row"><span class="cta__in"><span>Vamos criar</span></span></span>
+        <span class="cta__row"><span class="cta__in"><em>algo vivo?</em></span></span>
+      </a>
+      <div class="cta__info">
+        <div><span class="mono">E-mail</span><a href="mailto:ola@nebula.studio">ola@nebula.studio</a></div>
+        <div><span class="mono">Estúdio</span><span>Rua Augusta, 1500 — São Paulo</span></div>
+        <div><span class="mono">Social</span><span><a href="https://instagram.com" target="_blank" rel="noopener">Instagram</a> · <a href="https://behance.net" target="_blank" rel="noopener">Behance</a> · <a href="https://linkedin.com" target="_blank" rel="noopener">LinkedIn</a></span></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__giant" aria-hidden="true"><span class="line" data-chars data-weight>NÉBULA</span></div>
+    <div class="footer__bar mono">
+      <span>© 2026 Nébula Estúdio</span>
+      <span>Feito com poeira de estrelas em SP</span>
+      <a href="#top" data-magnetic>Voltar ao topo ↑</a>
+    </div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/CustomEase.min.js"></script>
+  <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
+  <script type="module" src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NÉBULA — Opções de fonte</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..600;1,9..144,300..600&family=Inter+Tight:wght@300..600&family=Plus+Jakarta+Sans:wght@300..700&family=Spectral:ital,wght@1,300;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,300..700&family=Sora:wght@300..700&family=Inter:wght@300..600&display=swap" rel="stylesheet" />
+<style>
+  :root { --bg: #050506; --fg: #efe8dc; --dim: #9c9aa2; --amber: #e8a25c; --lime: #bafe02; --line: rgba(239,232,220,.12); }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--fg); font-family: system-ui, sans-serif; padding: 32px 48px 64px; }
+  .opt { border-top: 1px solid var(--line); padding: 36px 0 44px; display: grid; grid-template-columns: 220px 1fr; gap: 32px; }
+  .tag { font: 500 12px/1.4 ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; color: var(--lime); }
+  .tag b { display: block; font-size: 44px; color: var(--fg); letter-spacing: 0; margin-bottom: 10px; font-family: system-ui; font-weight: 600; }
+  .tag span { display: block; color: var(--dim); margin-top: 8px; letter-spacing: .04em; text-transform: none; font-size: 13px; }
+  h1 { font-size: 104px; line-height: .92; letter-spacing: -.03em; font-weight: 400; }
+  h1 em { font-style: italic; color: var(--amber); }
+  p { margin-top: 22px; max-width: 34rem; font-size: 17px; line-height: 1.55; color: #d9d3c8; }
+  .row { display: flex; gap: 28px; margin-top: 18px; align-items: baseline; }
+  .row .big { font-size: 56px; line-height: 1; }
+  .row .small { font-size: 13px; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; }
+
+  /* A — Fraunces + Inter Tight */
+  .a h1, .a .big { font-family: "Fraunces", serif; font-variation-settings: "opsz" 144, "SOFT" 50; font-weight: 350; }
+  .a h1 em { font-weight: 300; }
+  .a p, .a .small { font-family: "Inter Tight", sans-serif; font-weight: 300; }
+
+  /* B — Plus Jakarta Sans + Spectral italic (Future Human) */
+  .b h1, .b .big { font-family: "Plus Jakarta Sans", sans-serif; font-weight: 500; letter-spacing: -.045em; }
+  .b h1 em { font-family: "Spectral", serif; font-weight: 300; letter-spacing: -.02em; }
+  .b p, .b .small { font-family: "Plus Jakarta Sans", sans-serif; font-weight: 300; }
+
+  /* C — Bricolage Grotesque */
+  .c h1, .c .big { font-family: "Bricolage Grotesque", sans-serif; font-variation-settings: "opsz" 96; font-weight: 500; letter-spacing: -.045em; }
+  .c h1 em { font-style: normal; font-weight: 300; }
+  .c p, .c .small { font-family: "Bricolage Grotesque", sans-serif; font-variation-settings: "opsz" 14; font-weight: 300; }
+
+  /* D — Sora + Inter */
+  .d h1, .d .big { font-family: "Sora", sans-serif; font-weight: 300; letter-spacing: -.05em; }
+  .d h1 em { font-style: normal; font-weight: 600; }
+  .d p, .d .small { font-family: "Inter", sans-serif; font-weight: 300; }
+</style>
+</head>
+<body>
+  <section class="opt a">
+    <div class="tag"><b>A</b>Fraunces + Inter Tight<span>Serifada suave e elegante. Editorial, quente, sofisticada.</span></div>
+    <div><h1>Desenhamos o que<br><em>ainda</em> não existe.</h1>
+      <p>Sites, marcas e mundos interativos para quem acredita que a tecnologia deve parecer humana.</p>
+      <div class="row"><span class="big">148+</span><span class="small">Projetos lançados · Manifesto · Serviços</span></div></div>
+  </section>
+  <section class="opt b">
+    <div class="tag"><b>B</b>Plus Jakarta Sans + Spectral<span>A dupla do Future Human: sans moderna com itálico serifado.</span></div>
+    <div><h1>Desenhamos o que<br><em>ainda</em> não existe.</h1>
+      <p>Sites, marcas e mundos interativos para quem acredita que a tecnologia deve parecer humana.</p>
+      <div class="row"><span class="big">148+</span><span class="small">Projetos lançados · Manifesto · Serviços</span></div></div>
+  </section>
+  <section class="opt c">
+    <div class="tag"><b>C</b>Bricolage Grotesque<span>Grotesca expressiva e atual. Ousada, com personalidade de estúdio.</span></div>
+    <div><h1>Desenhamos o que<br><em>ainda</em> não existe.</h1>
+      <p>Sites, marcas e mundos interativos para quem acredita que a tecnologia deve parecer humana.</p>
+      <div class="row"><span class="big">148+</span><span class="small">Projetos lançados · Manifesto · Serviços</span></div></div>
+  </section>
+  <section class="opt d">
+    <div class="tag"><b>D</b>Sora + Inter<span>Geométrica e limpa. Tecnológica, minimalista, futurista.</span></div>
+    <div><h1>Desenhamos o que<br><em>ainda</em> não existe.</h1>
+      <p>Sites, marcas e mundos interativos para quem acredita que a tecnologia deve parecer humana.</p>
+      <div class="row"><span class="big">148+</span><span class="small">Projetos lançados · Manifesto · Serviços</span></div></div>
+  </section>
+</body>
+</html>
