@@ -212,10 +212,6 @@ Como o projeto é estático, use **Framework Preset → Other**, sem comando de 
 **Criação**
 Gabriel Novaes ([@gabrielnovaesdev](https://github.com/gabrielnovaesdev))
 
-**Construído com**
-Claude Code e os agentes do **RUFLO**:
-`researcher`, `deep-researcher` e `reviewer`
-
 </td>
 <td valign="top" width="50%">
 
