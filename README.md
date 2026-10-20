@@ -43,7 +43,7 @@ As referências foram [Future Human](https://www.future-human.de/), [Mapa do Ast
 <td width="33%" valign="top">
 
 ### ◐ &nbsp;Vivo
-Orbe 3D com deformação por *simplex noise*, reflexo iridescente e um disco de **7 mil partículas** que orbitam em velocidade kepleriana.
+Hero em vídeo gerado no **Google Flow (Veo)**, em loop com fusão alinhada quadro a quadro, sem pulo de zoom. Se o vídeo falhar, entra o plano B: um orbe 3D em WebGL com **7 mil partículas**.
 
 </td>
 <td width="33%" valign="top">
@@ -101,7 +101,8 @@ Responsivo de 375px a 4K, respeita `prefers-reduced-motion`, funciona sem a cena
 flowchart LR
     A([index.html]) --> B[main.js<br/><sub>ES module</sub>]
     A --> C[styles.css<br/><sub>tokens + tema</sub>]
-    B -- import dinâmico --> D[scene.js<br/><sub>Three.js</sub>]
+    B --> V[Vídeo Veo<br/><sub>fusão alinhada</sub>]
+    B -. plano B .-> D[scene.js<br/><sub>Three.js</sub>]
     B --> E{{GSAP · ScrollTrigger<br/>CustomEase}}
     B --> F{{Lenis}}
     D --> G((Orbe GLSL))
@@ -111,7 +112,19 @@ flowchart LR
 ```
 
 <details>
-<summary><b>🪐 &nbsp;O orbe 3D</b></summary>
+<summary><b>🎬 &nbsp;O vídeo do hero</b></summary>
+<br />
+
+- gerado no Google Flow (Veo) a partir de um prompt baseado no próprio hero 3D
+- comprimido com o ffmpeg para **3,7MB** (1920px) e **1,8MB** (1280px, usado no celular e no modo de economia de dados)
+- o zoom do clipe foi **medido quadro a quadro** (≈4,5%/s em direção a 87,5% / 45%); cada vídeo é contra-escalado para suavizar o avanço da câmera, e na fusão de 2,2s o vídeo que entra fica alinhado ao que sai, sem imagem dupla nem pulo
+- paralaxe com o mouse, zoom e fade na rolagem, pausa fora da tela e com a aba oculta
+- um degradê lateral garante a leitura do título e esconde a emenda da geração
+
+</details>
+
+<details>
+<summary><b>🪐 &nbsp;O orbe 3D (plano B)</b></summary>
 <br />
 
 - `IcosahedronGeometry` com o vértice deslocado por **2 oitavas de simplex noise 3D**
@@ -167,6 +180,26 @@ Revelação com desfoque inspirada no `surgir` do Mapa do Astro, e estrelas cade
 
 </details>
 
+<details>
+<summary><b>⚡ &nbsp;Performance</b></summary>
+<br />
+
+| Lighthouse (local, sem compressão) | Antes | Depois |
+|:--|:--:|:--:|
+| Desktop | 92 | **99** |
+| Mobile (CPU 4× mais lenta, 4G) | 67 | **~77** |
+| CLS (deslocamento de layout) | 0,152 | **0** |
+| Peso no desktop | 7,5MB | **3,9MB** |
+
+- o vídeo é baixado **uma vez** e compartilhado pelos dois `<video>` da fusão via Blob
+- o céu da seção 04 (nebulosas + 4 mil estrelas) só é montado quando a seção se aproxima
+- os gatilhos de rolagem são criados atrás da tela de carregamento, num único recálculo de layout
+- fontes e scripts não bloqueiam a primeira pintura (`preload` + `defer`), capa em WebP
+- sem `will-change` em cada letra, sem filtros de desfoque em tela cheia, `resize` com *debounce*
+- `vercel.json` com cache longo para `/assets` (a Vercel já entrega com Brotli/HTTP2)
+
+</details>
+
 <br />
 
 ### Estrutura
@@ -176,9 +209,10 @@ nebula/
 ├── index.html      ← marcação, importmap e seções
 ├── styles.css      ← tokens, tema claro/escuro, layout responsivo
 ├── main.js         ← loader, rolagem, cursor, canvases, coreografia GSAP
-├── scene.js        ← cena Three.js (orbe, anel, poeira) + shaders GLSL
+├── scene.js        ← cena Three.js de reserva (orbe, anel, poeira) + shaders GLSL
 ├── fontes.html     ← comparação das opções tipográficas
-└── assets/         ← banner e capturas deste README
+├── vercel.json     ← cache dos assets na Vercel
+└── assets/         ← vídeo do hero, banner e capturas deste README
 ```
 
 <br />

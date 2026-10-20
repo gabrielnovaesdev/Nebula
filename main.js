@@ -4,6 +4,7 @@ const fine = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
 const $ = (s, c = document) => c.querySelector(s);
 const $$ = (s, c = document) => [...c.querySelectorAll(s)];
 const lerp = (a, b, t) => a + (b - a) * t;
+const debounce = (fn, ms = 150) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
 if (!window.gsap || !window.ScrollTrigger) {
   $("#loader")?.remove();
@@ -80,20 +81,137 @@ $$("[data-split] .line").forEach((l) => (l.innerHTML = `<span class="line__in">$
 const words = $("[data-words]");
 if (words) words.innerHTML = words.textContent.trim().split(/\s+/).map((w) => `<span class="word">${w}</span>`).join(" ");
 
-/* ============ 3D scene ============ */
-let scene = null;
-const scenePromise = import("./scene.js")
-  .then(({ createScene }) => {
-    scene = createScene($("#gl"), { reduce });
-    gsap.ticker.add(scene.render);
-  })
-  .catch((err) => console.warn("Cena 3D indisponível:", err));
+/* ============ Hero media: Flow/Veo video, 3D scene as fallback ============ */
+let scene = null, heroVideo = null;
+
+function loadScene() {
+  document.body.classList.add("hero-3d");
+  return import("./scene.js")
+    .then(({ createScene }) => {
+      scene = createScene($("#gl"), { reduce });
+      gsap.ticker.add(scene.render);
+    })
+    .catch((err) => console.warn("Cena 3D indisponível:", err));
+}
+
+// The Veo clip is a constant dolly-in, so a plain restart "jumps" the zoom back.
+// Measured zoom of the clip relative to t=0 (fitted frame-to-frame; centre ≈ 87.5% / 45%):
+const ZOOM = [[0, 1], [1, 1.04], [2, 1.084], [3, 1.128], [4.4, 1.208], [5.6, 1.288], [6.6, 1.351], [7.4, 1.432]];
+const ZOOM_CENTER = [0.875, 0.45];
+const zoomAt = (t) => {
+  for (let i = 1; i < ZOOM.length; i++) {
+    if (t <= ZOOM[i][0]) {
+      const [t0, z0] = ZOOM[i - 1], [t1, z1] = ZOOM[i], f = (t - t0) / (t1 - t0);
+      return Math.exp(Math.log(z0) + (Math.log(z1) - Math.log(z0)) * f);
+    }
+  }
+  return ZOOM[ZOOM.length - 1][1];
+};
+const easeSine = (x) => 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, x)));
+
+// Two stacked <video>s crossfade, but the image never jumps:
+// 1. each clip is counter-scaled so 85% of the dolly is cancelled (a gentle forward drift remains);
+// 2. during the crossfade the incoming clip is scaled to match the outgoing framing exactly,
+//    so both layers overlap pixel-aligned and only the liquid/particles dissolve;
+// 3. the tiny leftover (~3%) relaxes with a sine ease over the following seconds.
+function createLoop(a, b, T = 4.4, XF = 2.2) {
+  const KEEP = 0.85;
+  const S0 = Math.pow(zoomAt(T + XF), KEEP);
+  const base = (v) => S0 * Math.pow(zoomAt(v.currentTime), -KEEP);
+  const extra = new Map([[a, 1], [b, 1]]);
+  let front = a, back = b, fading = false, playing = false, relaxFrom = 1;
+  gsap.set(b, { opacity: 0 });
+
+  const setOrigin = () => {
+    for (const v of [a, b]) {
+      if (!v.videoWidth) continue;
+      const ew = v.clientWidth, eh = v.clientHeight;
+      const sc = Math.max(ew / v.videoWidth, eh / v.videoHeight);
+      const dw = v.videoWidth * sc, dh = v.videoHeight * sc;
+      const [px, py] = getComputedStyle(v).objectPosition.split(" ").map((p) => parseFloat(p) / 100);
+      v.style.transformOrigin = `${(ZOOM_CENTER[0] * dw + (ew - dw) * px).toFixed(1)}px ${(ZOOM_CENTER[1] * dh + (eh - dh) * py).toFixed(1)}px`;
+    }
+  };
+  a.addEventListener("loadedmetadata", setOrigin);
+  addEventListener("resize", debounce(setOrigin));
+  setOrigin();
+
+  gsap.ticker.add(() => {
+    if (!front.duration) return;
+    if (playing && !fading && front.currentTime >= T) {
+      fading = true;
+      back.currentTime = 0;
+      back.play().catch(() => {});
+      back.classList.add("is-front"); front.classList.remove("is-front");
+    }
+    if (fading) {
+      // keep the incoming clip locked to what the outgoing one is showing
+      const shownFront = zoomAt(front.currentTime) * base(front) * extra.get(front);
+      extra.set(back, shownFront / (zoomAt(back.currentTime) * base(back)));
+      const p = back.currentTime / XF;
+      back.style.opacity = easeSine(p).toFixed(3);
+      if (p >= 1 || front.ended) {
+        front.pause(); front.style.opacity = 0; extra.set(front, 1);
+        [front, back] = [back, front];
+        relaxFrom = extra.get(front);
+        fading = false;
+      }
+    } else {
+      const r = (front.currentTime - XF) / Math.max(0.5, T - XF);
+      extra.set(front, 1 + (relaxFrom - 1) * (1 - easeSine(r)));
+    }
+    for (const v of [a, b]) v.style.transform = `scale(${(base(v) * extra.get(v)).toFixed(4)})`;
+  });
+  // background tabs throttle the ticker: never get stuck on the last frame
+  [a, b].forEach((v) => v.addEventListener("ended", () => { if (v === front && !fading) { v.currentTime = 0; v.play().catch(() => {}); } }));
+  return {
+    play() { playing = true; front.play().catch(() => {}); if (fading) back.play().catch(() => {}); },
+    pause() { playing = false; a.pause(); b.pause(); },
+  };
+}
+
+function setupHeroVideo() {
+  const [a, b] = $$(".hero__video");
+  const small = innerWidth < 900 || navigator.connection?.saveData;
+  const url = `assets/video/hero-${small ? 1280 : 1920}.mp4`;
+  // Download the clip once and share it between both <video>s (the crossfade needs two)
+  return fetch(url)
+    .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob(); })
+    .then((blob) => new Promise((resolve, reject) => {
+      a.src = b.src = URL.createObjectURL(blob);
+      const t = setTimeout(resolve, 4000);
+      a.addEventListener("canplaythrough", () => { clearTimeout(t); resolve(); }, { once: true });
+      a.addEventListener("error", () => { clearTimeout(t); reject(a.error); }, { once: true });
+    })).then(() => {
+    heroVideo = createLoop(a, b);
+    let inView = true;
+    const sync = () => (inView && !document.hidden && !reduce ? heroVideo.play() : heroVideo.pause());
+    new IntersectionObserver(([e]) => { inView = e.isIntersecting; if (started) sync(); }).observe($(".hero"));
+    document.addEventListener("visibilitychange", () => started && sync());
+    let started = false;
+    heroVideo.start = () => { started = true; sync(); };
+  });
+}
+
+const heroPromise = setupHeroVideo().catch((err) => {
+  console.warn("Vídeo do hero indisponível, usando a cena 3D:", err);
+  $(".hero__media").remove();
+  return loadScene();
+});
 
 /* ============ Pointer + cursor ============ */
 const mouse = { x: innerWidth / 2, y: innerHeight / 2 };
 const heroEl = $(".hero");
+const parallax = fine && !reduce && $(".hero__zoom") ? {
+  x: gsap.quickTo(".hero__zoom", "x", { duration: 1.6, ease: "power3.out" }),
+  y: gsap.quickTo(".hero__zoom", "y", { duration: 1.6, ease: "power3.out" }),
+} : null;
 window.addEventListener("pointermove", (e) => {
   mouse.x = e.clientX; mouse.y = e.clientY;
+  if (parallax) {
+    parallax.x(((e.clientX / innerWidth) - 0.5) * -28);
+    parallax.y(((e.clientY / innerHeight) - 0.5) * -18);
+  }
   if (scene) {
     scene.state.mx = (e.clientX / innerWidth) * 2 - 1;
     scene.state.my = -((e.clientY / innerHeight) * 2 - 1);
@@ -113,6 +231,7 @@ if (fine) {
   window.addEventListener("pointerdown", () => cur.classList.add("is-down"));
   window.addEventListener("pointerup", () => cur.classList.remove("is-down"));
   gsap.ticker.add((_, dt) => {
+    if (Math.abs(mouse.x - r.x) < 0.05 && Math.abs(mouse.y - r.y) < 0.05) return; // idle: no style writes
     const k = 1 - Math.pow(0.82, dt / 16.67);
     r.x = lerp(r.x, mouse.x, k); r.y = lerp(r.y, mouse.y, k);
     setDot.x(mouse.x); setDot.y(mouse.y);
@@ -177,7 +296,7 @@ addEventListener("keydown", (e) => e.key === "Escape" && menuOpen && toggleMenu(
 function reelCanvas() {
   const c = $("#reel"), ctx = c.getContext("2d");
   const resize = () => { c.width = Math.min(innerWidth, 960); c.height = Math.round(c.width * 9 / 16); };
-  resize(); addEventListener("resize", resize);
+  resize(); addEventListener("resize", debounce(resize));
   const blobs = [
     { h: "232,162,92", s: 0.6, o: 0 }, { h: "229,128,106", s: 0.45, o: 2 },
     { h: "186,254,2", s: 0.22, o: 4, a: 0.22 }, { h: "60,30,170", s: 0.75, o: 1 },
@@ -214,82 +333,275 @@ function reelCanvas() {
 
 function skyCanvas() {
   const c = $("#sky"), ctx = c.getContext("2d");
-  let w = 0, h = 0, stars = [];
-  const local = { x: -9999, y: -9999, sx: -9999, sy: -9999 };
+  const host = c.parentElement;
+  let w = 0, h = 0, dpr = 1, stars = [], bg = null;
+
+  // Star colours by temperature (mostly white/cream, some blue, ~6% orange)
+  const TEMPS = [[200, 220, 255], [236, 240, 255], [255, 247, 232], [255, 230, 196], [255, 196, 140]];
+  const pickTemp = () => { const r = Math.random(); return r < 0.12 ? 0 : r < 0.45 ? 1 : r < 0.78 ? 2 : r < 0.94 ? 3 : 4; };
+
+  // Real constellations: centre (fraction of the canvas) + size (fraction of its shorter side),
+  // so the shapes keep their proportions on any screen. Revealed near the cursor.
+  const NAMED = [
+    { name: "Crux · Cruzeiro do Sul", c: [0.2, 0.34], size: 0.34, alpha: 0,
+      pts: [[0.5, 0], [0.45, 1], [0.05, 0.42], [0.9, 0.5], [0.66, 0.66]], edges: [[0, 1], [2, 3]] },
+    { name: "Órion · Três Marias", c: [0.8, 0.68], size: 0.38, alpha: 0,
+      pts: [[0.1, 0.05], [0.9, 0.12], [0.38, 0.5], [0.5, 0.47], [0.62, 0.44], [0.15, 0.95], [0.85, 0.9]],
+      edges: [[0, 2], [1, 4], [2, 3], [3, 4], [2, 5], [4, 6]] },
+  ];
+
+  // Pre-rendered sprites: soft glow, diffraction spikes, glow tinted per temperature
+  const sprite = (size, draw) => { const s = document.createElement("canvas"); s.width = s.height = size; draw(s.getContext("2d"), size); return s; };
+  const glow = sprite(64, (g, s) => {
+    const gr = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+    gr.addColorStop(0, "rgba(255,255,255,1)"); gr.addColorStop(0.12, "rgba(255,255,255,0.75)");
+    gr.addColorStop(0.35, "rgba(255,255,255,0.16)"); gr.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = gr; g.fillRect(0, 0, s, s);
+  });
+  const spikes = sprite(128, (g, s) => {
+    g.translate(s / 2, s / 2);
+    for (const [len, wid, rot] of [[s / 2, 1.2, 0], [s / 2, 1.2, Math.PI / 2], [s / 3.4, 0.7, Math.PI / 4], [s / 3.4, 0.7, -Math.PI / 4]]) {
+      g.save(); g.rotate(rot);
+      const lg = g.createLinearGradient(-len, 0, len, 0);
+      lg.addColorStop(0, "rgba(255,255,255,0)"); lg.addColorStop(0.5, "rgba(255,255,255,0.9)"); lg.addColorStop(1, "rgba(255,255,255,0)");
+      g.fillStyle = lg; g.fillRect(-len, -wid / 2, len * 2, wid); g.restore();
+    }
+  });
+  const tinted = TEMPS.map((t) => sprite(64, (g, s) => {
+    g.drawImage(glow, 0, 0); g.globalCompositeOperation = "source-atop";
+    g.fillStyle = `rgb(${t[0]},${t[1]},${t[2]})`; g.fillRect(0, 0, s, s);
+  }));
+
+  // Nebula clouds + Milky Way band, rendered once per resize
+  function buildBackground() {
+    bg = document.createElement("canvas");
+    bg.width = Math.round(w * dpr * 1.1); bg.height = Math.round(h * dpr * 1.1);
+    const g = bg.getContext("2d"), W = bg.width, H = bg.height;
+    g.fillStyle = "#050507"; g.fillRect(0, 0, W, H);
+    g.globalCompositeOperation = "lighter";
+    const cloud = (x, y, r, col, a) => {
+      const gr = g.createRadialGradient(x, y, 0, x, y, r);
+      gr.addColorStop(0, `rgba(${col},${a})`); gr.addColorStop(0.5, `rgba(${col},${a * 0.35})`); gr.addColorStop(1, `rgba(${col},0)`);
+      g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2);
+    };
+    const ang = -0.42, cx = W * 0.52, cy = H * 0.5, ux = Math.cos(ang), uy = Math.sin(ang);
+    for (let i = 0; i < 26; i++) {
+      const t = (i / 25 - 0.5) * 1.5 * W, off = (Math.random() - 0.5) * H * 0.12;
+      cloud(cx + ux * t - uy * off, cy + uy * t + ux * off, H * (0.16 + Math.random() * 0.14), i % 3 ? "90,78,170" : "170,120,96", 0.085);
+    }
+    cloud(W * 0.22, H * 0.3, H * 0.55, "60,28,150", 0.12);
+    cloud(W * 0.78, H * 0.72, H * 0.5, "232,140,90", 0.07);
+    cloud(W * 0.62, H * 0.22, H * 0.38, "229,110,120", 0.05);
+    cloud(W * 0.35, H * 0.85, H * 0.4, "40,70,140", 0.07);
+    g.globalCompositeOperation = "source-over";
+    for (let i = 0; i < 4200; i++) {
+      const t = (Math.random() - 0.5) * 1.6 * W, off = (Math.random() + Math.random() + Math.random() - 1.5) * H * 0.09;
+      const x = cx + ux * t - uy * off, y = cy + uy * t + ux * off, tp = TEMPS[pickTemp()];
+      const sz = Math.random() < 0.9 ? dpr * 0.8 : dpr * 1.4;
+      g.fillStyle = `rgba(${tp[0]},${tp[1]},${tp[2]},${0.1 + Math.random() * 0.4})`;
+      g.fillRect(x, y, sz, sz);
+    }
+    // faint dark dust lane along the band (one continuous stroke, no blotches)
+    g.save();
+    g.translate(cx, cy); g.rotate(ang);
+    const lane = g.createLinearGradient(0, -H * 0.05, 0, H * 0.05);
+    lane.addColorStop(0, "rgba(5,5,7,0)"); lane.addColorStop(0.5, "rgba(5,5,7,0.35)"); lane.addColorStop(1, "rgba(5,5,7,0)");
+    g.fillStyle = lane; g.filter = `blur(${Math.round(H * 0.01)}px)`;
+    g.fillRect(-W, -H * 0.03, W * 2, H * 0.08);
+    g.restore();
+  }
+
   const resize = () => {
     if (c.clientWidth === w && Math.abs(c.clientHeight - h) < 120) return;
-    const dpr = Math.min(devicePixelRatio, 2);
+    dpr = Math.min(devicePixelRatio, innerWidth < 760 ? 1.5 : 2);
     w = c.clientWidth; h = c.clientHeight;
     c.width = w * dpr; c.height = h * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    stars = Array.from({ length: Math.min(420, Math.floor((w * h) / 4800)) }, () => ({
-      x: Math.random() * w, y: Math.random() * h, r: Math.random() * 1.3 + 0.25,
-      vx: (Math.random() - 0.5) * 0.06, vy: (Math.random() - 0.5) * 0.06, tw: Math.random() * 6, ox: 0, oy: 0,
-    }));
+    const count = Math.min(520, Math.floor((w * h) / 3200));
+    stars = Array.from({ length: count }, () => {
+      const m = Math.pow(Math.random(), 3.2); // magnitude: many faint, few bright
+      return {
+        x: Math.random() * w, y: Math.random() * h, z: 0.25 + Math.random() * 0.75,
+        r: 0.35 + m * 2.1, m, temp: pickTemp(),
+        tw: Math.random() * 10, tws: 0.6 + Math.random() * 1.8, glow: 0, ox: 0, oy: 0, px: 0, py: 0,
+      };
+    });
+    edges.clear();
+    buildBackground();
   };
-  resize(); addEventListener("resize", resize);
-  const host = c.parentElement;
-  host.addEventListener("pointermove", (e) => { const b = c.getBoundingClientRect(); local.x = e.clientX - b.left; local.y = e.clientY - b.top; });
-  host.addEventListener("pointerleave", () => { local.x = local.y = -9999; });
-  let visible = false;
-  new IntersectionObserver(([e]) => (visible = e.isIntersecting)).observe(c);
-  const R = 180;
-  const near = [];
-  // Shooting stars (mapadoastro): every 3–9s, 0.6–0.95s life, 12–30° angle
+
+  // Pointer, with an idle "ghost" that wanders so touch users also see constellations form
+  const P = { x: 0, y: 0, sx: 0, sy: 0, active: false, last: 0, power: 0 };
+  host.addEventListener("pointermove", (e) => {
+    const b = c.getBoundingClientRect();
+    P.x = e.clientX - b.left; P.y = e.clientY - b.top; P.active = true; P.last = performance.now();
+  });
+  host.addEventListener("pointerleave", () => { P.active = false; });
+
+  const edges = new Map(); // "i-j" -> alpha (fast fade-in, slow fade-out trail)
   const shots = [];
-  let nextShot = 3.5 + Math.random() * 3;
-  const drawShots = (time, dt) => {
+  let nextShot = 2.5 + Math.random() * 3, visible = false;
+  // Nebula + 4k background stars are only built when the section gets close (keeps page load light)
+  new IntersectionObserver(([e], io) => {
+    if (!e.isIntersecting) return;
+    io.disconnect();
+    resize(); P.sx = w / 2; P.sy = h / 2;
+    addEventListener("resize", debounce(resize));
+  }, { rootMargin: "100% 0px" }).observe(c);
+  new IntersectionObserver(([e]) => (visible = e.isIntersecting)).observe(c);
+
+  // Prim's minimum spanning tree over nearby bright stars: sparse, natural constellation shapes
+  function mst(ids) {
+    const out = [];
+    if (ids.length < 2) return out;
+    const inT = new Set([ids[0]]);
+    while (inT.size < ids.length) {
+      let best = null, bd = Infinity;
+      for (const a of inT) for (const b of ids) {
+        if (inT.has(b)) continue;
+        const d = (stars[a].px - stars[b].px) ** 2 + (stars[a].py - stars[b].py) ** 2;
+        if (d < bd) { bd = d; best = [a, b]; }
+      }
+      if (!best || bd > 160 * 160) break;
+      inT.add(best[1]); out.push(best[0] < best[1] ? best : [best[1], best[0]]);
+    }
+    return out;
+  }
+
+  gsap.ticker.add((time, dtMs) => {
+    if (!visible || !w) return;
+    const dt = Math.min(dtMs, 50) / 1000;
+    const k = 1 - Math.pow(0.0005, dt);
+    const R = Math.min(260, Math.max(170, w * 0.17));
+
+    const idle = !P.active || performance.now() - P.last > 2500;
+    const tx = idle ? w * (0.5 + 0.32 * Math.sin(time * 0.17)) : P.x;
+    const ty = idle ? h * (0.5 + 0.26 * Math.sin(time * 0.23 + 1.3)) : P.y;
+    const follow = idle ? 0.25 : 1;
+    P.sx += (tx - P.sx) * k * follow;
+    P.sy += (ty - P.sy) * k * follow;
+    P.power += ((idle ? 0.55 : 1) - P.power) * k * 0.5;
+    const mx = P.sx / w - 0.5, my = P.sy / h - 0.5;
+
+    // background (slight parallax)
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1;
+    ctx.drawImage(bg, -w * 0.05 - mx * w * 0.03, -h * 0.05 - my * h * 0.03, w * 1.1, h * 1.1);
+
+    // telescope lens glow following the pointer
+    ctx.globalCompositeOperation = "lighter";
+    const lens = ctx.createRadialGradient(P.sx, P.sy, 0, P.sx, P.sy, R * 1.2);
+    lens.addColorStop(0, `rgba(232,170,110,${0.1 * P.power})`);
+    lens.addColorStop(0.5, `rgba(120,90,200,${0.05 * P.power})`);
+    lens.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = lens; ctx.fillRect(P.sx - R * 1.2, P.sy - R * 1.2, R * 2.4, R * 2.4);
+
+    // stars
+    const near = [];
+    for (let i = 0; i < stars.length; i++) {
+      const s = stars[i];
+      if (!reduce) { s.x += 0.012 * s.z; if (s.x > w + 4) s.x = -4; }
+      const bx = s.x - mx * 40 * s.z, by = s.y - my * 30 * s.z;
+      const dx = bx - P.sx, dy = by - P.sy, d = Math.hypot(dx, dy) || 1;
+      const inR = d < R ? 1 - d / R : 0;
+      // gentle gravitational pull towards the lens centre
+      s.ox += ((-dx / d) * inR * 10 * P.power - s.ox) * k * 0.6;
+      s.oy += ((-dy / d) * inR * 10 * P.power - s.oy) * k * 0.6;
+      s.px = bx + s.ox; s.py = by + s.oy;
+      s.glow += (inR * P.power - s.glow) * k * 0.7;
+      if (inR > 0.05 && s.m > 0.12) near.push(i);
+
+      const tw = 0.55 + 0.45 * Math.sin(time * s.tws + s.tw);
+      const a = Math.min(1, (0.3 + s.m * 0.9) * tw + s.glow * 0.8);
+      const size = (s.r * 5 + s.glow * 10 * (0.4 + s.m)) * (0.8 + s.z * 0.4);
+      ctx.globalAlpha = a;
+      ctx.drawImage(tinted[s.temp], s.px - size / 2, s.py - size / 2, size, size);
+      if (s.m > 0.45 || s.glow > 0.35) {
+        const sp = (14 + s.m * 30 + s.glow * 26) * (0.7 + tw * 0.3);
+        ctx.globalAlpha = Math.max(0, Math.min(0.8, (s.m - 0.3) * 0.9 + s.glow * 0.6)) * tw;
+        ctx.drawImage(spikes, s.px - sp / 2, s.py - sp / 2, sp, sp);
+      }
+    }
+
+    // procedural constellations around the pointer (they yield when a named one lights up)
+    const namedFocus = Math.max(...NAMED.map((n) => n.alpha));
+    const yieldK = Math.min(1, Math.max(0, 1 - (namedFocus - 0.2) * 2.5));
+    near.sort((a, b) => stars[b].glow - stars[a].glow);
+    const current = new Set(mst(near.slice(0, 11)).map(([a, b]) => `${a}-${b}`));
+    current.forEach((key) => { if (!edges.has(key)) edges.set(key, 0); });
+    ctx.lineCap = "round";
+    ctx.globalAlpha = 1;
+    for (const [key, alpha] of edges) {
+      const on = current.has(key);
+      const na = alpha + ((on ? 1 : 0) - alpha) * k * (on ? 0.9 : 0.18);
+      if (!on && na < 0.01) { edges.delete(key); continue; }
+      edges.set(key, na);
+      const [a, b] = key.split("-").map(Number), A = stars[a], B = stars[b];
+      if (!A || !B) { edges.delete(key); continue; }
+      const va = na * yieldK;
+      if (va < 0.01) continue;
+      const gr = ctx.createLinearGradient(A.px, A.py, B.px, B.py);
+      gr.addColorStop(0, `rgba(255,236,210,${0.55 * va})`);
+      gr.addColorStop(0.5, `rgba(232,162,92,${0.35 * va})`);
+      gr.addColorStop(1, `rgba(255,236,210,${0.55 * va})`);
+      ctx.strokeStyle = gr; ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.moveTo(A.px, A.py); ctx.lineTo(B.px, B.py); ctx.stroke();
+      ctx.strokeStyle = `rgba(255,236,210,${0.3 * va})`; ctx.lineWidth = 0.6;
+      for (const S of [A, B]) { ctx.beginPath(); ctx.arc(S.px, S.py, 4.5 + S.m * 3, 0, Math.PI * 2); ctx.stroke(); }
+    }
+
+    // named constellations
+    ctx.font = "500 10px 'Geist Mono', ui-monospace, monospace";
+    ctx.textAlign = "center";
+    for (const n of NAMED) {
+      const S = Math.min(w, h) * n.size, ccx = w * n.c[0], ccy = h * n.c[1];
+      const pts = n.pts.map(([px, py]) => [ccx + (px - 0.5) * S - mx * 30, ccy + (py - 0.5) * S - my * 22]);
+      const prox = Math.max(0, 1 - Math.hypot(P.sx - ccx, P.sy - ccy) / (R * 1.6)) * P.power;
+      n.alpha += (0.12 + prox * 0.88 - n.alpha) * k * 0.5;
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = `rgba(232,162,92,${0.6 * n.alpha})`; ctx.lineWidth = 0.9;
+      ctx.setLineDash([2, 5]);
+      for (const [a, b] of n.edges) { ctx.beginPath(); ctx.moveTo(pts[a][0], pts[a][1]); ctx.lineTo(pts[b][0], pts[b][1]); ctx.stroke(); }
+      ctx.setLineDash([]);
+      pts.forEach(([x, y], i) => {
+        const sz = 9 + n.alpha * 16 + (i === 0 ? 4 : 0);
+        ctx.globalAlpha = 0.5 + n.alpha * 0.5;
+        ctx.drawImage(tinted[i % 2 ? 2 : 1], x - sz / 2, y - sz / 2, sz, sz);
+        if (n.alpha > 0.3) {
+          const sp = 18 + n.alpha * 22;
+          ctx.globalAlpha = n.alpha * 0.55;
+          ctx.drawImage(spikes, x - sp / 2, y - sp / 2, sp, sp);
+        }
+      });
+      if (n.alpha > 0.2) {
+        const low = pts.reduce((m, p) => (p[1] > m[1] ? p : m));
+        ctx.globalAlpha = Math.min(1, (n.alpha - 0.2) * 1.6);
+        ctx.fillStyle = "#efe8dc";
+        ctx.fillText(n.name.toUpperCase(), low[0], low[1] + 26);
+      }
+    }
+
+    // shooting stars
     if (time > nextShot && !reduce) {
-      const ang = (12 + Math.random() * 18) * Math.PI / 180;
-      shots.push({ x: Math.random() * w * 0.7, y: Math.random() * h * 0.4, ang, life: 0, dur: 0.6 + Math.random() * 0.35, len: 160 + Math.random() * 140, speed: w * 0.9 });
+      const ang = (14 + Math.random() * 16) * Math.PI / 180;
+      shots.push({ x: Math.random() * w * 0.6, y: Math.random() * h * 0.35, ang, life: 0, dur: 0.7 + Math.random() * 0.4, len: 180 + Math.random() * 160, speed: w * 0.8 });
       nextShot = time + 3 + Math.random() * 6;
     }
     for (let i = shots.length - 1; i >= 0; i--) {
       const s = shots[i];
       s.life += dt;
-      const k = s.life / s.dur;
-      if (k >= 1) { shots.splice(i, 1); continue; }
+      const q = s.life / s.dur;
+      if (q >= 1) { shots.splice(i, 1); continue; }
       const hx = s.x + Math.cos(s.ang) * s.speed * s.life, hy = s.y + Math.sin(s.ang) * s.speed * s.life;
-      const tx = hx - Math.cos(s.ang) * s.len, ty = hy - Math.sin(s.ang) * s.len;
-      const alpha = k < 0.55 ? 1 : 1 - (k - 0.55) / 0.45;
-      const g = ctx.createLinearGradient(tx, ty, hx, hy);
-      g.addColorStop(0, "rgba(239,232,220,0)"); g.addColorStop(1, `rgba(255,248,235,${alpha})`);
-      ctx.strokeStyle = g; ctx.lineWidth = 1.4; ctx.lineCap = "round";
-      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx, hy); ctx.stroke();
-      ctx.fillStyle = `rgba(255,248,235,${alpha})`;
-      ctx.beginPath(); ctx.arc(hx, hy, 1.8, 0, Math.PI * 2); ctx.fill();
+      const tx2 = hx - Math.cos(s.ang) * s.len, ty2 = hy - Math.sin(s.ang) * s.len;
+      const al = q < 0.55 ? 1 : 1 - (q - 0.55) / 0.45;
+      const g = ctx.createLinearGradient(tx2, ty2, hx, hy);
+      g.addColorStop(0, "rgba(255,236,210,0)"); g.addColorStop(0.8, `rgba(232,162,92,${0.35 * al})`); g.addColorStop(1, `rgba(255,250,240,${al})`);
+      ctx.globalAlpha = 1; ctx.strokeStyle = g; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(tx2, ty2); ctx.lineTo(hx, hy); ctx.stroke();
+      ctx.globalAlpha = al; ctx.drawImage(glow, hx - 14, hy - 14, 28, 28);
     }
-  };
-  gsap.ticker.add((time, dtMs) => {
-    if (!visible) return;
-    if (local.x < -999) { local.sx = local.x; local.sy = local.y; }
-    else if (local.sx < -999) { local.sx = local.x; local.sy = local.y; }
-    else { local.sx = lerp(local.sx, local.x, 0.15); local.sy = lerp(local.sy, local.y, 0.15); }
-    ctx.clearRect(0, 0, w, h);
-    let nn = 0;
-    for (const s of stars) {
-      if (!reduce) { s.x += s.vx; s.y += s.vy; }
-      if (s.x < 0) s.x = w; else if (s.x > w) s.x = 0;
-      if (s.y < 0) s.y = h; else if (s.y > h) s.y = 0;
-      const dx = s.x - local.sx, dy = s.y - local.sy, d = Math.hypot(dx, dy) || 1;
-      const f = d < R ? (1 - d / R) * 16 : 0;
-      s.ox = lerp(s.ox, (dx / d) * f, 0.12); s.oy = lerp(s.oy, (dy / d) * f, 0.12);
-      const x = s.x + s.ox, y = s.y + s.oy;
-      const a = 0.3 + 0.7 * Math.abs(Math.sin(time * 0.9 + s.tw));
-      if (d < R) { const o = near[nn] || (near[nn] = { x: 0, y: 0 }); o.x = x; o.y = y; nn++; }
-      ctx.fillStyle = d < R ? `rgba(186,254,2,${0.5 + a * 0.5})` : `rgba(239,232,220,${a * 0.75})`;
-      ctx.beginPath(); ctx.arc(x, y, d < R ? s.r + 0.7 : s.r, 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.lineWidth = 0.6;
-    for (let i = 0; i < nn; i++) {
-      for (let j = i + 1; j < nn; j++) {
-        const dd = Math.hypot(near[i].x - near[j].x, near[i].y - near[j].y);
-        if (dd < 95) {
-          ctx.strokeStyle = `rgba(232,162,92,${(1 - dd / 95) * 0.65})`;
-          ctx.beginPath(); ctx.moveTo(near[i].x, near[i].y); ctx.lineTo(near[j].x, near[j].y); ctx.stroke();
-        }
-      }
-    }
-    drawShots(time, Math.min(dtMs, 50) / 1000);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
   });
 }
 
@@ -419,6 +731,7 @@ function scrollAnims() {
   // Hero exit parallax + scene scroll state
   gsap.to(".hero__inner", { yPercent: -16, opacity: 0, ease: "none", scrollTrigger: { trigger: ".hero", start: "top top", end: "bottom top", scrub: true } });
   ScrollTrigger.create({ trigger: ".hero", start: "top top", end: "bottom top", onUpdate: (s) => scene && (scene.state.scroll = s.progress) });
+  if ($(".hero__media")) gsap.to(".hero__media", { scale: 1.14, yPercent: 10, opacity: 0.25, ease: "none", scrollTrigger: { trigger: ".hero", start: "top top", end: "bottom top", scrub: true } });
 
   // Marquee velocity skew
   const skewTo = gsap.quickTo(".marquee__skew", "skewX", { duration: 0.6, ease: "power3" });
@@ -437,7 +750,7 @@ function scrollAnims() {
 function revealStatic() {
   $("#loader").remove();
   document.body.classList.remove("is-loading");
-  scenePromise.then(() => scene && (scene.state.intro = 1));
+  heroPromise.then(() => scene && (scene.state.intro = 1));
   $$(".manifesto__text .word").forEach((w) => (w.style.opacity = 1));
   $$(".stat__num").forEach((n) => (n.textContent = n.dataset.count));
 }
@@ -448,30 +761,35 @@ function intro() {
   tl.to(".loader__word, .loader__subin", { yPercent: -110, duration: 0.9, ease: "power3.in", stagger: 0.06 })
     .to(".loader__ring", { scale: 1.5, opacity: 0, duration: 1.1, ease: "expo.inOut" }, 0)
     .to(".loader__top, .loader__foot, .loader__bar", { opacity: 0, duration: 0.5, ease: "power2.out" }, 0)
-    .add(() => { document.body.classList.remove("is-loading"); lenis?.start(); ScrollTrigger.refresh(); }, 0.7)
+    .add(() => { document.body.classList.remove("is-loading"); lenis?.start(); }, 0.7)
     .to("#loader", { clipPath: "inset(0% 0% 100% 0%)", duration: 1.25, ease: EASE("wipe", "expo.inOut") }, 0.55)
     .to(".loader__center", { y: "-12vh", opacity: 0, duration: 1.25, ease: EASE("wipe", "expo.inOut") }, 0.55)
     .add(() => scene && gsap.to(scene.state, { intro: 1, duration: 3.2, ease: "expo.out" }), 0.85)
+    .add(() => heroVideo?.start(), 0.55)
+    .fromTo(".hero__zoom", { scale: 1.25, opacity: 0 }, { scale: 1.03, opacity: 1, duration: 3.2, ease: "expo.out" }, 0.6)
     .from(".hero__title .ch", { yPercent: 120, rotate: 7, transformOrigin: "0% 100%", duration: 1.7, stagger: 0.022 }, 1.15)
     .from(".hero__eyebrow .line__in", { yPercent: 110, duration: 1.2 }, 1.35)
     .fromTo(".hero .fade-in", { y: 14, opacity: 0, filter: "blur(6px)" }, { y: 0, opacity: 1, filter: "blur(0px)", duration: 1.3, ease: EASE("radial", "power3.out"), stagger: 0.1, clearProps: "filter" }, 1.45)
     .from(".nav > *", { y: -24, opacity: 0, duration: 1.2, stagger: 0.05 }, 1.4)
     .set("#loader", { display: "none" });
-  scrollAnims();
-  workPreview();
-  ScrollTrigger.refresh();
 }
 
 function loader() {
   const count = $("#loaderCount"), bar = $("#loaderBar"), prog = $(".loader__prog"), orbit = $(".loader__orbit"), msg = $("#loaderMsg");
   const messages = ["Calibrando o céu", "Alinhando órbitas", "Acendendo estrelas"];
-  // Weighted real progress (page 30 / fonts 20 / 3D scene 50) with an asymptotic
+  // Weighted real progress (page 30 / fonts 20 / hero video or 3D 50) with an asymptotic
   // creep so the counter never stalls, a 1.6s minimum and a 6s safety net.
   let loaded = 0, shown = 0, msgIndex = 0, done = false, forced = false, msgTl = null;
   const t0 = performance.now(), MIN = 1600;
   const add = (w) => () => (loaded += w);
-  document.fonts.ready.then(add(20));
-  scenePromise.then(add(50));
+  // the font stylesheet is non-blocking: wait for it, then for the font files themselves
+  new Promise((res) => {
+    const l = $("#fontcss");
+    if (!l || l.media === "all") return res();
+    l.addEventListener("load", res, { once: true });
+    setTimeout(res, 3000);
+  }).then(() => document.fonts.ready).then(() => { add(20)(); ScrollTrigger.refresh(); });
+  heroPromise.then(add(50));
   if (document.readyState === "complete") loaded += 30; else addEventListener("load", add(30), { once: true });
   setTimeout(() => (forced = true), 6000);
 
@@ -508,7 +826,14 @@ function loader() {
 
 reelCanvas();
 skyCanvas();
-if (reduce) { revealStatic(); scrollAnimsReduced(); } else loader();
+if (reduce) { revealStatic(); scrollAnimsReduced(); }
+else {
+  // Scroll choreography is built behind the loader, before window "load", so ScrollTrigger
+  // measures everything in a single batched refresh instead of ~25 forced layouts at intro time.
+  scrollAnims();
+  workPreview();
+  loader();
+}
 
 function scrollAnimsReduced() {
   ScrollTrigger.create({
